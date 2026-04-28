@@ -1,37 +1,58 @@
 import streamlit as st
 import pandas as pd
 import urllib.parse
-import time
 
+# 1. Konfigurasi Halaman
 st.set_page_config(page_title="WA Blast Pro", page_icon="🚀")
 
 st.title("🚀 WA Blast - One Click Sender")
 st.info("Catatan: Izinkan 'Pop-up' di browser Anda agar fitur kirim sekaligus berfungsi.")
 
+# 2. Upload File
 uploaded_file = st.file_uploader("Upload Excel/CSV", type=['csv', 'xlsx'])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+    # Membaca file berdasarkan format
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+        
+    st.write("Preview Data:")
     st.dataframe(df.head())
     
-    msg_template = st.text_area("Pesan (Gunakan {Nama} untuk personalisasi)", "Halo {Nama}, ini pesan dari sistem.")
-    delay = st.slider("Jeda antar pesan (detik)", 2, 10, 3)
+    # 3. Input Pesan & Delay
+    msg_template = st.text_area("Pesan (Gunakan {Nama} untuk personalisasi)", 
+                                  "Halo {Nama}, ini pesan otomatis dari sistem.")
+    
+    delay = st.slider("Jeda antar pesan (detik)", 2, 15, 3)
 
+    # 4. Tombol Eksekusi
     if st.button("🚀 KIRIM KE SEMUA NOMOR"):
         if 'Nomor' in df.columns:
             links = []
-            for _, row in df.iterrows():
+            for index, row in df.iterrows():
                 nama = row.get('Nama', 'Pelanggan')
-                # Bersihkan nomor (harus awali 62)
-                phone = str(row['Nomor']).replace("+", "").replace(" ", "").replace("-", "")
-                if not phone.startswith('62'):
-                    phone = "62" + phone.lstrip('0')
                 
+                # Membersihkan nomor telepon agar hanya angka
+                phone = str(row['Nomor']).replace("+", "").replace(" ", "").replace("-", "")
+                
+                # Pastikan format 62
+                if not phone.startswith('62'):
+                    if phone.startswith('0'):
+                        phone = "62" + phone[1:]
+                    else:
+                        phone = "62" + phone
+                
+                # Encode pesan untuk URL
                 custom_msg = msg_template.format(Nama=nama)
                 encoded_msg = urllib.parse.quote(custom_msg)
-                links.append(f"https://web.whatsapp.com/send?phone={phone}&text={encoded_msg}")
+                
+                # Buat link WhatsApp Web
+                wa_link = f"https://web.whatsapp.com/send?phone={phone}&text={encoded_msg}"
+                links.append(wa_link)
 
-            # JavaScript untuk membuka tab satu per satu
+            # 5. JavaScript untuk membuka tab secara berurutan
             js_code = f"""
             <script>
             const links = {links};
@@ -44,18 +65,8 @@ if uploaded_file:
             }});
             </script>
             """
+            # Menjalankan JavaScript di latar belakang
             st.components.v1.html(js_code, height=0)
-            st.success(f"Sedang memproses {len(links)} pesan. Mohon tunggu...")
+            st.success(f"Sedang memproses {len(links)} pesan. Mohon cek pop-up di browser Anda.")
         else:
-            st.error("Kolom 'Nomor' tidak ditemukan!")
-
----
-
-### Hal Penting Agar Berhasil:
-
-1.  **Izin Pop-up:** Saat Anda menekan tombol, browser (Chrome/Edge) biasanya akan memunculkan ikon kecil di baris alamat (kanan atas) yang bertuliskan *"Pop-up blocked"*. Anda **WAJIB** klik ikon tersebut dan pilih **"Always allow pop-ups from..."**.
-2.  **WhatsApp Web:** Pastikan Anda sudah login ke WhatsApp Web di browser yang sama.
-3.  **Jeda Waktu (Delay):** Jangan gunakan delay terlalu cepat (di bawah 2 detik). WhatsApp bisa mendeteksi aktivitas bot jika ratusan tab terbuka sekaligus dalam waktu singkat.
-4.  **Limitasi Browser:** Jika daftar nomor Anda sangat banyak (misal > 50), browser mungkin akan menjadi berat karena membuka banyak tab. Disarankan mengirim dalam kelompok kecil (per 20 nomor).
-
-Metode ini adalah cara paling stabil untuk menjalankan fitur "Blast" di **Streamlit Cloud** tanpa perlu library tambahan yang berat.
+            st.error("Gagal: Kolom bernama 'Nomor' tidak ditemukan di file Anda.")
